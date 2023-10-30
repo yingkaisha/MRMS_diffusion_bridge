@@ -13,23 +13,23 @@ sys.path.insert(0, '/glade/u/home/ksha/GAN_proj/libs/')
 from namelist import *
 import data_utils as du
 
-with h5py.File(save_dir+'MRMS_ERA5_domain.hdf', 'r') as h5io:
-    lon_ERA5 = h5io['lon_ERA5'][...]
-    lat_ERA5 = h5io['lat_ERA5'][...]
+with h5py.File(save_dir+'CNN_domain.hdf', 'r') as h5io:
+    lon_GFS = h5io['lon_GFS'][...]
+    lat_GFS = h5io['lat_GFS'][...]
 
 
 year = 2021
 base = datetime(year, 1, 1)
 date_list = [base + timedelta(days=h) for h in range(365)]
 
-shape_grid = lon_ERA5.shape
+shape_grid = lon_GFS.shape
 
-APCP = np.empty((len(date_list),)+shape_grid)
-CAPE = np.empty((len(date_list),)+shape_grid)
-PWAT = np.empty((len(date_list),)+shape_grid)
-T800 = np.empty((len(date_list),)+shape_grid)
-U800 = np.empty((len(date_list),)+shape_grid)
-RH800 = np.empty((len(date_list),)+shape_grid)
+APCP = np.empty((len(date_list),)+shape_grid); APCP[...] = np.nan
+CAPE = np.empty((len(date_list),)+shape_grid); CAPE[...] = np.nan
+PWAT = np.empty((len(date_list),)+shape_grid); PWAT[...] = np.nan
+T800 = np.empty((len(date_list),)+shape_grid); T800[...] = np.nan
+U800 = np.empty((len(date_list),)+shape_grid); U800[...] = np.nan
+RH800 = np.empty((len(date_list),)+shape_grid); RH800[...] = np.nan
 
 var_inds1 = [315, 320, 316, 451, 474, 476,]
 var_inds2 = [446, 452, 447, 597, 624, 626,]
@@ -68,7 +68,7 @@ for lead in LEADs:
             var_inds = var_inds2
         else:
             print(filename_gfs)
-            error
+            error_error_error
 
         with pygrib.open(filename_gfs) as grbio:
             T_ = grbio[var_inds[0]].values #
@@ -78,25 +78,27 @@ for lead in LEADs:
             CAPE_ = grbio[var_inds[4]].values
             PWAT_ = grbio[var_inds[5]].values
         
-        T_NA = T_[:-360, 720:]
-        T_NA = np.flipud(np.concatenate((T_NA, T_[:-360, 0][:, None]), axis=1))
+        T_NA = T[:-360, 720:]
+        T_NA = np.flipud(T_NA)[98:203, 218:460]
         
-        U_NA = U_[:-360, 720:]
-        U_NA = np.flipud(np.concatenate((U_NA, U_[:-360, 0][:, None]), axis=1))
+        U_NA = U[:-360, 720:]
+        U_NA = np.flipud(U_NA)[98:203, 218:460]
         
-        RH_NA = RH_[:-360, 720:]
-        RH_NA = np.flipud(np.concatenate((RH_NA, RH_[:-360, 0][:, None]), axis=1))
+        V_NA = V[:-360, 720:]
+        V_NA = np.flipud(V_NA)[98:203, 218:460]
         
-        APCP_NA = APCP_[:-360, 720:]
-        APCP_NA = np.flipud(np.concatenate((APCP_NA, APCP_[:-360, 0][:, None]), axis=1))
+        RH_NA = RH[:-360, 720:]
+        RH_NA = np.flipud(RH_NA)[98:203, 218:460]
         
-        CAPE_NA = CAPE_[:-360, 720:]
-        CAPE_NA = np.flipud(np.concatenate((CAPE_NA, CAPE_[:-360, 0][:, None]), axis=1))
+        APCP_NA = APCP[:-360, 720:]
+        APCP_NA = np.flipud(APCP_NA)[98:203, 218:460]
         
-        PWAT_NA = PWAT_[:-360, 720:]
-        PWAT_NA = np.flipud(np.concatenate((PWAT_NA, PWAT_[:-360, 0][:, None]), axis=1))
-    
-    
+        CAPE_NA = CAPE[:-360, 720:]
+        CAPE_NA = np.flipud(CAPE_NA)[98:203, 218:460]
+        
+        PWAT_NA = PWAT[:-360, 720:]
+        PWAT_NA = np.flipud(PWAT_NA)[98:203, 218:460]
+        
         APCP[i_dt, ...] = APCP_NA
         CAPE[i_dt, ...] = CAPE_NA
         PWAT[i_dt, ...] = PWAT_NA
