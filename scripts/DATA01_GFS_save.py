@@ -18,7 +18,7 @@ with h5py.File(save_dir+'CNN_domain.hdf', 'r') as h5io:
     lat_GFS = h5io['lat_GFS'][...]
 
 
-year = 2021
+year = 2022
 base = datetime(year, 1, 1)
 date_list = [base + timedelta(days=h) for h in range(365)]
 
