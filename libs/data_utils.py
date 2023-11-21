@@ -15,6 +15,9 @@ from scipy.interpolate import NearestNDInterpolator
 # from sklearn.metrics import mean_squared_error
 # from sklearn.metrics import mean_absolute_error
 
+def mean_absolute_error(y_true, y_pred):
+    return np.mean(np.abs(y_true - y_pred))
+
 def shuffle_ind(L):
     '''
     shuffle indices

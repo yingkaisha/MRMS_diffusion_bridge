@@ -35,15 +35,15 @@ class GaussianDiffusion:
 
         # Define the linear variance schedule
         # ============ Linear ============== #
-        # self.betas = betas = np.linspace(
-        #     beta_start,
-        #     beta_end,
-        #     timesteps,
-        #     dtype=np.float64,  # Using float64 for better precision
-        # )
+        self.betas = betas = np.linspace(
+            beta_start,
+            beta_end,
+            timesteps,
+            dtype=np.float64,  # Using float64 for better precision
+        )
         # =========== tuned =============== #
-        sch_ = (beta_end/beta_start)**(1/3)
-        self.betas = betas = np.linspace(1, sch_, timesteps, dtype=np.float64)
+        # sch_ = (beta_end/beta_start)**(1/3)
+        # self.betas = betas = np.linspace(1, sch_, timesteps, dtype=np.float64)
         
         self.num_timesteps = int(timesteps)
 
@@ -224,6 +224,51 @@ class TimeEmbedding(layers.Layer):
         emb = tf.concat([tf.sin(emb), tf.cos(emb)], axis=-1)
         return emb
 
+
+def resblock_vqvae(X, kernel_size, filter_num, activation):
+    Fx = layers.Conv2D(filter_num, kernel_size, padding='same')(X)
+    Fx = layers.BatchNormalization()(Fx)
+    Fx = layers.Activation(activation)(Fx)
+    Fx = layers.Conv2D(filter_num, kernel_size, padding='same')(Fx)
+    out = layers.Add()([X, Fx])
+    out = layers.BatchNormalization(axis=-1)(out)
+    out = layers.Activation(activation)(out)
+    return out
+
+def ResidualBlock_base(width, activation_fn=keras.activations.relu):
+    def apply(inputs):
+        x, t = inputs
+        input_width = x.shape[3]
+
+        if input_width == width:
+            residual = x
+        else:
+            residual = layers.Conv2D(
+                width, kernel_size=1, kernel_initializer=kernel_init(1.0)
+            )(x)
+
+        temb = activation_fn(t)
+        temb = layers.Dense(width, kernel_initializer=kernel_init(1.0))(temb)[
+            :, None, None, :
+        ]
+
+        x = layers.BatchNormalization()(x)
+        x = activation_fn(x)
+        x = layers.Conv2D(
+            width, kernel_size=3, padding="same", kernel_initializer=kernel_init(1.0)
+        )(x)
+
+        x = layers.Add()([x, temb])
+        x = layers.BatchNormalization()(x)
+        x = activation_fn(x)
+
+        x = layers.Conv2D(
+            width, kernel_size=3, padding="same", kernel_initializer=kernel_init(0.0)
+        )(x)
+        x = layers.Add()([x, residual])
+        return x
+
+    return apply
 
 def ResidualBlock(width, groups=8, activation_fn=keras.activations.swish):
     def apply(inputs):
