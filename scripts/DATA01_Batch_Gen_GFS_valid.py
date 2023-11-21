@@ -1,5 +1,6 @@
 '''
 This script generate training and validation batches that contain: MRMS and GFS predictors.
+Validation set version
 '''
 
 import os
@@ -38,7 +39,7 @@ def norm_cape(x):
     return (x-200)/450/2
 
 # ======================================================== #
-year = 2021
+year = 2023
 base = datetime(year, 1, 1)
 date_list = [base + timedelta(days=d) for d in range(365)]
 
@@ -48,9 +49,11 @@ LEADs = [3, 6, 9, 12, 15, 18, 21, 24, 27, 30, 33, 36] #
 INIs = [0, 6, 12, 18]
 
 size = 128 # patch size: 128-by-128
-gap = 24 # subset patches with gaps of 24 grids
-N_rain_thres = 1600 # each patch must have 1600 raining grid cells
+gap = 96 # subset patches with gaps of 96 grids
+N_rain_thres = 1 # each patch must have 1 raining grid cells
 V_rain_thres = 0.1 # 0.1 mm/3h means rain
+
+batch_file_name = 'VALID_y{:04d}_ini{:02d}_lead{:02d}_dt{:04d}_ix{:03d}_iy{:03d}.npy'
 # ======================================================== #
 
 with h5py.File(save_dir+'CNN_domain.hdf', 'r') as h5io:
@@ -76,16 +79,15 @@ with h5py.File('/glade/campaign/cisl/aiml/ksha/GFS/MRMS_y{}.hdf'.format(year), '
 L_base = len(MRMS_base)
 
 # forecast lead times can exceed one year
-N_beyond = 5*24
-N_total = L_base + N_beyond
-with h5py.File('/glade/campaign/cisl/aiml/ksha/GFS/MRMS_y{}.hdf'.format(year+1), 'r') as h5io:
-    MRMS_extra = h5io['MRMS'][:N_beyond, ...]
-
-MRMS = np.concatenate((MRMS_base, MRMS_extra), axis=0)
+# N_beyond = 5*24
+N_total = L_base # + N_beyond
+# with h5py.File('/glade/campaign/cisl/aiml/ksha/GFS/MRMS_y{}.hdf'.format(year+1), 'r') as h5io:
+#     MRMS_extra = h5io['MRMS'][:N_beyond, ...]
+# MRMS = np.concatenate((MRMS_base, MRMS_extra), axis=0)
 
 # ------- file locations and names ------ #
 BATCH_dir = '/glade/campaign/cisl/aiml/ksha/BATCH_GFS_MRMS/'
-batch_file_name = 'GFS_y{:04d}_ini{:02d}_lead{:02d}_dt{:04d}_ix{:03d}_iy{:03d}.npy'
+
 
 name_gfs = '/glade/campaign/cisl/aiml/ksha/GFS/GFS_{}_ini{:02d}_f{:02d}.hdf'
 name_apcp = '/glade/campaign/cisl/aiml/ksha/GFS/GFS_APCP_{}_ini{:02d}_f{:02d}.hdf'
