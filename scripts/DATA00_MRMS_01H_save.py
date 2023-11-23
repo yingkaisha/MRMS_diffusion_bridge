@@ -27,7 +27,7 @@ with h5py.File(save_dir+'CNN_domain.hdf', 'r') as h5io:
     lon_01 = h5io['lon_01'][...]
     lat_01 = h5io['lat_01'][...]
 
-year = 2022 #2021
+year = 2023 #2021
 MRMS_dir = '/glade/campaign/cisl/aiml/ksha/MRMS_{}/'.format(year)
 
 base = datetime(year, 1, 1)

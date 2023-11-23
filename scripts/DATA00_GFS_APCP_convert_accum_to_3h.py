@@ -17,7 +17,7 @@ from namelist import *
 import data_utils as du
 
 # --------- #
-year = 2022
+year = 2023
 LEADs = [6, 9, 12, 15, 18, 21, 24, 27, 30, 33, 36] # forecast lead time [hr]
 INIs = [0, 6, 12, 18] # initialization times [UTC hrs]
 
