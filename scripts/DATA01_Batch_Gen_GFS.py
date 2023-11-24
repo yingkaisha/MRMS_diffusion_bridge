@@ -38,11 +38,11 @@ def norm_cape(x):
     return (x-200)/450/2
 
 # ======================================================== #
-year = 2022
+year = 2021
 base = datetime(year, 1, 1)
 date_list = [base + timedelta(days=d) for d in range(365)]
 
-N_start = 0 #363
+N_start = 81 #363
 
 LEADs = [3, 6, 9, 12, 15, 18, 21, 24, 27, 30, 33, 36] #
 INIs = [0, 6, 12, 18]

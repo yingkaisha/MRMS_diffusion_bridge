@@ -78,8 +78,9 @@ latent_size = (32, 32, latent_dim) # size of compressed latent features
 load_weights = True
 
 # location of the previous weights
-model_name_load = '/glade/work/ksha/GAN/models/VQ_VAE_P128_{}_{}_L{}_N{}_{}_tune'.format(
+model_name_load = '/glade/work/ksha/GAN/models/VQ_VAE_P128_{}_{}_L{}_N{}_{}_tune2'.format(
     filter_nums[0], filter_nums[1], latent_dim, num_embeddings, activation)
+print('Loading {}'.format(model_name_load))
 
 lr = 0 # learning rate
 
@@ -180,7 +181,8 @@ latent_size = (16, 16, filter_nums[-1])
 
 load_weights = True
 # location of the previous weights
-model_name_load = '/glade/work/ksha/GAN/models/BC_{}_{}_{}_tune3'.format(filter_nums[0], filter_nums[1], activation)
+model_name_load = '/glade/work/ksha/GAN/models/BC_{}_{}_{}_tune4'.format(filter_nums[0], filter_nums[1], activation)
+print('Loading {}'.format(model_name_load))
 
 lr = 0 # learning rate
 

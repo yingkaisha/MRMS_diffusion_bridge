@@ -75,11 +75,10 @@ num_embeddings = 128 # number of the VQ codes
 input_size = (128, 128, 1) # size of MRMS input
 latent_size = (32, 32, latent_dim) # size of compressed latent features
 
-load_weights = True
-
 # location of the previous weights
-model_name_load = '/glade/work/ksha/GAN/models/VQ_VAE_P128_{}_{}_L{}_N{}_{}_tune'.format(
+model_name_load = '/glade/work/ksha/GAN/models/VQ_VAE_P128_{}_{}_L{}_N{}_{}_tune2'.format(
     filter_nums[0], filter_nums[1], latent_dim, num_embeddings, activation)
+print('Loading {}'.format(model_name_load))
 
 lr = 0 # learning rate
 
@@ -157,9 +156,8 @@ model_vqvae = keras.Model(IN, OUT)
 vqvae_trainer = vu.VQVAETrainer(model_vqvae, 1.0, latent_dim, num_embeddings)
 
 # load weights
-if load_weights:
-    W_old = mu.dummy_loader(model_name_load)
-    vqvae_trainer.vqvae.set_weights(W_old)
+W_old = mu.dummy_loader(model_name_load)
+vqvae_trainer.vqvae.set_weights(W_old)
 
 # compile
 vqvae_trainer.compile(optimizer=keras.optimizers.Adam(learning_rate=lr))
@@ -178,9 +176,9 @@ input_size = (128, 128, 8)
 # Embedded GFS sizes
 latent_size = (16, 16, filter_nums[-1])
 
-load_weights = True
 # location of the previous weights
-model_name_load = '/glade/work/ksha/GAN/models/BC_{}_{}_{}_tune3'.format(filter_nums[0], filter_nums[1], activation)
+model_name_load = '/glade/work/ksha/GAN/models/BC_{}_{}_{}_tune4'.format(filter_nums[0], filter_nums[1], activation)
+print('Loading {}'.format(model_name_load))
 
 lr = 0 # learning rate
 
@@ -270,9 +268,8 @@ model = keras.Model([IN, time_input], OUT)
 model.compile(loss=keras.losses.mean_absolute_error, optimizer=keras.optimizers.Adam(learning_rate=lr))
 
 # load weights
-if load_weights:
-    W_old = mu.dummy_loader(model_name_load)
-    model.set_weights(W_old)
+W_old = mu.dummy_loader(model_name_load)
+model.set_weights(W_old)
 
 # ====================== Batch gen data prep ====================== #
 
