@@ -51,6 +51,9 @@ size = 128 # patch size: 128-by-128
 gap = 24 # subset patches with gaps of 24 grids
 N_rain_thres = 1600 # each patch must have 1600 raining grid cells
 V_rain_thres = 0.1 # 0.1 mm/3h means rain
+
+BATCH_dir = '/glade/campaign/cisl/aiml/ksha/BATCH_GFS_MRMS/'
+batch_file_name = 'GFS_y{:04d}_ini{:02d}_lead{:02d}_dt{:04d}_ix{:03d}_iy{:03d}.npy'
 # ======================================================== #
 
 with h5py.File(save_dir+'CNN_domain.hdf', 'r') as h5io:
@@ -84,9 +87,6 @@ with h5py.File('/glade/campaign/cisl/aiml/ksha/GFS/MRMS_y{}.hdf'.format(year+1),
 MRMS = np.concatenate((MRMS_base, MRMS_extra), axis=0)
 
 # ------- file locations and names ------ #
-BATCH_dir = '/glade/campaign/cisl/aiml/ksha/BATCH_GFS_MRMS/'
-batch_file_name = 'GFS_y{:04d}_ini{:02d}_lead{:02d}_dt{:04d}_ix{:03d}_iy{:03d}.npy'
-
 name_gfs = '/glade/campaign/cisl/aiml/ksha/GFS/GFS_{}_ini{:02d}_f{:02d}.hdf'
 name_apcp = '/glade/campaign/cisl/aiml/ksha/GFS/GFS_APCP_{}_ini{:02d}_f{:02d}.hdf'
 

@@ -48,22 +48,22 @@ def norm_pwat(x):
 def norm_cape(x):
     return (x-200)/450/2
 
-year = 2021
+year = 2023
 base = datetime(year, 1, 1)
 date_list = [base + timedelta(days=d) for d in range(365)]
 
-N_start = 81
+N_start = 0
 
-LEADs = [3, 6, 9, 12, 15, 18, 21, 24, 27, 30, 33, 36] #
-INIs = [0, 6, 12, 18]
+LEADs = [3, 6, 9, 12,] #
+INIs = [6, 12, 18]
 
 size = 128 # patch size: 128-by-128
-gap = 24 # subset patches with gaps of 24 grids
+gap = 96 # subset patches with gaps of 24 grids
 N_rain_thres = 1600 # each patch must have 1600 raining grid cells
 V_rain_thres = 0.1 # 0.1 mm/3h means rain
 
 BATCH_dir = '/glade/campaign/cisl/aiml/ksha/BATCH_Diffusion/'
-batch_file_name = 'diffusion_y{:04d}_ini{:02d}_lead{:02d}_dt{:04d}_ix{:03d}_iy{:03d}.npy'
+batch_file_name = 'valid_y{:04d}_ini{:02d}_lead{:02d}_dt{:04d}_ix{:03d}_iy{:03d}.npy'
 
 # ====================== Encoder network ====================== #
 
@@ -299,13 +299,13 @@ with h5py.File('/glade/campaign/cisl/aiml/ksha/GFS/MRMS_y{}.hdf'.format(year), '
 L_base = len(MRMS_base)
 
 # forecast lead times can exceed one year
-N_beyond = 5*24
-N_total = L_base + N_beyond
-with h5py.File('/glade/campaign/cisl/aiml/ksha/GFS/MRMS_y{}.hdf'.format(year+1), 'r') as h5io:
-    MRMS_extra = h5io['MRMS'][:N_beyond, ...]
-
-MRMS = np.concatenate((MRMS_base, MRMS_extra), axis=0)
-
+#N_beyond = 5*24
+N_total = L_base # + N_beyond
+# with h5py.File('/glade/campaign/cisl/aiml/ksha/GFS/MRMS_y{}.hdf'.format(year+1), 'r') as h5io:
+#     MRMS_extra = h5io['MRMS'][:N_beyond, ...]
+# MRMS = np.concatenate((MRMS_base, MRMS_extra), axis=0)
+MRMS = MRMS_base
+                       
 name_gfs = '/glade/campaign/cisl/aiml/ksha/GFS/GFS_{}_ini{:02d}_f{:02d}.hdf'
 name_apcp = '/glade/campaign/cisl/aiml/ksha/GFS/GFS_APCP_{}_ini{:02d}_f{:02d}.hdf'
 

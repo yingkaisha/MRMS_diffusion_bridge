@@ -15,9 +15,13 @@ sys.path.insert(0, '/glade/u/home/ksha/GAN_proj/libs/')
 from namelist import *
 import data_utils as du
 
+def norm_precip(x):
+    return np.log(x+1)
+
 # ======================================================== #
-year = 2023
-BATCH_dir = '/glade/campaign/cisl/aiml/ksha/BATCH_MRMS/'
+year = 2021
+#BATCH_dir = '/glade/campaign/cisl/aiml/ksha/BATCH_MRMS/'
+BATCH_dir = '/glade/campaign/cisl/aiml/ksha/BATCH_MRMS_extra/'
 
 N_hour = 3
 size = 128 # patch size: 128-by-128
@@ -38,7 +42,7 @@ x_mrms = 256; y_mrms = 576 # 0.1 deg MRMS size
 grid_shape = (x_mrms, y_mrms) # the size of 0.1 deg MRMS
 L = len(MRMS) - N_hour # number of available time dimensions
 
-for i in range(L):
+for i in range(81*24):
     mrms = np.zeros(grid_shape)
     for j in range(N_hour):
         mrms += MRMS[i+j]
@@ -65,6 +69,6 @@ for i in range(L):
 
                             save_name = BATCH_dir+batch_name.format(year, i, ix, iy)
                             print(save_name)
-                            np.save(save_name, mrms_save)
+                            np.save(save_name, norm_precip(mrms_save))
 
 

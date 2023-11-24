@@ -18,8 +18,11 @@ import data_utils as du
 
 # --------- #
 year = 2023
-LEADs = [6, 9, 12, 15, 18, 21, 24, 27, 30, 33, 36] # forecast lead time [hr]
-INIs = [0, 6, 12, 18] # initialization times [UTC hrs]
+# LEADs = [6, 9, 12, 15, 18, 21, 24, 27, 30, 33, 36] # forecast lead time [hr]
+# INIs = [0, 6, 12, 18] # initialization times [UTC hrs]
+
+LEADs = [6, 9, 12,] # forecast lead time [hr]
+INIs = [6, 12, 18] # initialization times [UTC hrs]
 
 name_gfs = '/glade/campaign/cisl/aiml/ksha/GFS/GFS_{}_ini{:02d}_f{:02d}.hdf'
 name_save = 'GFS_APCP_{}_ini{:02d}_f{:02d}.hdf'
@@ -46,6 +49,7 @@ for ini in INIs:
             APCP0 = h5io['APCP'][...]
 
         data = APCP1-APCP0
+        
         if np.sum(data<0) > 0:
             print("warning: negative precip {} [mm] dectected on ini{} lead{}".format(np.min(data), ini, lead))
             data[data<0] = 0
