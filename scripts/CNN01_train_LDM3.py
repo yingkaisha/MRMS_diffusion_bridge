@@ -53,13 +53,13 @@ F_y = 1/6.3 # the scale of VQ-VAE codes
 N_atten1 = np.sum(left_attention)
 N_atten2 = np.sum(right_attention)
 
-load_weights = True # True: load previous weights
+load_weights = False # True: load previous weights
 # location of the previous weights
-model_name = '/glade/work/ksha/GAN/models/LDM_atten{}-{}_res{}_tune/'.format(
+model_name = '/glade/work/ksha/GAN/models/LDM2_atten{}-{}_res{}_base/'.format(
     N_atten1, N_atten2, num_res_blocks)
 
 # location for saving new weights
-model_name_save = '/glade/work/ksha/GAN/models/LDM_atten{}-{}_res{}_tune2/'.format(
+model_name_save = '/glade/work/ksha/GAN/models/LDM2_atten{}-{}_res{}_tune/'.format(
     N_atten1, N_atten2, num_res_blocks)
 
 lr = 5e-6 # learning rate
@@ -141,7 +141,7 @@ def build_model(input_shape, gfs_shape, widths, left_attention, right_attention,
     # End block
     x = layers.GroupNormalization(groups=norm_groups)(x)
     x = activation_fn(x)
-    x = layers.Conv2D(input_shape[-1], (3, 3), padding="same", kernel_initializer=mu.kernel_init(0.0))(x)
+    x = layers.Conv2D(input_shape[-1], (1, 1), padding="same", kernel_initializer=mu.kernel_init(0.0))(x)
     return keras.Model([image_input, time_input, gfs_input], x, name="unet")
     
 # Reverse diffusino model

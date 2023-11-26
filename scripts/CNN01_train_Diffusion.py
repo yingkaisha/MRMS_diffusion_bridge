@@ -30,7 +30,7 @@ from namelist import *
 import data_utils as du
 import model_utils as mu
 
-# ================================================= #
+# ============================= Hyperparameters ============================= #
 
 total_timesteps = 50 # diffusion time steps
 norm_groups = 8 # number of attention heads, number of layer normalization groups 
@@ -39,46 +39,38 @@ norm_groups = 8 # number of attention heads, number of layer normalization group
 clip_min = -1.0
 clip_max = 1.0
 
-widths = [64, 96, 128, 256] # number of convolution kernels per up-/downsampling level
-left_attention = [False, True, True, True] # True: use multi-head attnetion on each up-/downsampling level
-right_attention = [False, True, True, True]
-num_res_blocks = 2  # Number of residual blocks
+Fy = 1/np.log(100+1) # max precip 100 mm
 
-input_shape = (32, 32, 8) # the tensor shape of reverse diffusion input
-gfs_shape = (16, 16, 256) # the tensor shape of GFS embeddings
+widths = [16, 32, 48, 64] # number of convolution kernels per up-/downsampling level
+left_attention = [False, False, True, True] # True: use multi-head attnetion on each up-/downsampling level
+right_attention = [False, False, True, True]
+num_res_blocks = 1  # Number of residual blocks
 
-F_x = 0.1 # the scale of GFS embeddings
-F_y = 1/6.3 # the scale of VQ-VAE codes
-
-N_atten1 = np.sum(left_attention)
-N_atten2 = np.sum(right_attention)
+input_shape = (128, 128, 2) # the tensor shape of reverse diffusion input
 
 load_weights = True # True: load previous weights
+
 # location of the previous weights
-model_name = '/glade/work/ksha/GAN/models/LDM_atten{}-{}_res{}_tune/'.format(
-    N_atten1, N_atten2, num_res_blocks)
-
+model_name = '/glade/work/ksha/GAN/models/DM_example_tune/'
 # location for saving new weights
-model_name_save = '/glade/work/ksha/GAN/models/LDM_atten{}-{}_res{}_tune2/'.format(
-    N_atten1, N_atten2, num_res_blocks)
+model_name_save = '/glade/work/ksha/GAN/models/DM_example_tune2/'
 
-lr = 5e-6 # learning rate
+lr = 1e-5 # learning rate
 
 # samples per epoch = N_batch * batch_size
 epochs = 99999
 N_batch = 128
 batch_size = 32
 
-# ================================================= #
+# ============================= Model design ============================= #
 
-def build_model(input_shape, gfs_shape, widths, left_attention, right_attention, num_res_blocks=2, norm_groups=8,
+def build_model(input_shape, widths, left_attention, right_attention, num_res_blocks=2, norm_groups=8,
                 interpolation="nearest", activation_fn=keras.activations.swish,):
 
     first_conv_channels = widths[0]
     
     image_input = layers.Input(shape=input_shape, name="image_input")
     time_input = keras.Input(shape=(), dtype=tf.int64, name="time_input")
-    gfs_input = layers.Input(shape=gfs_shape, name="gfs_input")
     
     x = layers.Conv2D(first_conv_channels, kernel_size=(3, 3), padding="same",
                       kernel_initializer=mu.kernel_init(1.0),)(image_input)
@@ -95,12 +87,7 @@ def build_model(input_shape, gfs_shape, widths, left_attention, right_attention,
             x = mu.ResidualBlock(widths[i], groups=norm_groups, activation_fn=activation_fn)([x, temb])
             
             if has_attention[i]:
-                x_gfs = gfs_input
-                x_gfs = layers.Conv2D(widths[i], kernel_size=(3, 3), padding="same",)(x_gfs)
-                x_gfs = layers.GroupNormalization(groups=norm_groups)(x_gfs)
-                x_gfs = activation_fn(x_gfs)
-                
-                x = layers.MultiHeadAttention(num_heads=norm_groups, key_dim=widths[i])(x, x_gfs)
+                x = layers.MultiHeadAttention(num_heads=norm_groups, key_dim=widths[i])(x, x)
                 
             skips.append(x)
 
@@ -110,14 +97,7 @@ def build_model(input_shape, gfs_shape, widths, left_attention, right_attention,
 
     # MiddleBlock
     x = mu.ResidualBlock(widths[-1], groups=norm_groups, activation_fn=activation_fn)([x, temb])
-    
-    x_gfs = gfs_input
-    x_gfs = layers.Conv2D(widths[i], kernel_size=(3, 3), padding="same",)(x_gfs)
-    x_gfs = layers.GroupNormalization(groups=norm_groups)(x_gfs)
-    x_gfs = activation_fn(x_gfs)
-    
-    x = layers.MultiHeadAttention(num_heads=norm_groups, key_dim=widths[-1])(x, x_gfs)
-    
+    x = layers.MultiHeadAttention(num_heads=norm_groups, key_dim=widths[-1])(x, x)
     x = mu.ResidualBlock(widths[-1], groups=norm_groups, activation_fn=activation_fn)([x, temb])
 
     # UpBlock
@@ -128,12 +108,7 @@ def build_model(input_shape, gfs_shape, widths, left_attention, right_attention,
             x = mu.ResidualBlock(widths[i], groups=norm_groups, activation_fn=activation_fn)([x, temb])
             
             if has_attention[i]:
-                x_gfs = gfs_input
-                x_gfs = layers.Conv2D(widths[i], kernel_size=(3, 3), padding="same",)(x_gfs)
-                x_gfs = layers.GroupNormalization(groups=norm_groups)(x_gfs)
-                x_gfs = activation_fn(x_gfs)
-                
-                x = layers.MultiHeadAttention(num_heads=norm_groups, key_dim=widths[i])(x, x_gfs)
+                x = layers.MultiHeadAttention(num_heads=norm_groups, key_dim=widths[i])(x, x)
 
         if i != 0:
             x = mu.UpSample(widths[i], interpolation=interpolation)(x)
@@ -141,11 +116,11 @@ def build_model(input_shape, gfs_shape, widths, left_attention, right_attention,
     # End block
     x = layers.GroupNormalization(groups=norm_groups)(x)
     x = activation_fn(x)
-    x = layers.Conv2D(input_shape[-1], (3, 3), padding="same", kernel_initializer=mu.kernel_init(0.0))(x)
-    return keras.Model([image_input, time_input, gfs_input], x, name="unet")
+    x = layers.Conv2D(1, (3, 3), padding="same", kernel_initializer=mu.kernel_init(0.0))(x)
+    return keras.Model([image_input, time_input], x, name="unet")
     
 # Reverse diffusino model
-model = build_model(input_shape=input_shape, gfs_shape=gfs_shape, widths=widths,
+model = build_model(input_shape=input_shape, widths=widths,
                     left_attention=left_attention, right_attention=right_attention, 
                     num_res_blocks=num_res_blocks, norm_groups=norm_groups, activation_fn=keras.activations.swish)
 
@@ -160,60 +135,53 @@ if load_weights:
 # configure the forward diffusion steps
 gdf_util = mu.GaussianDiffusion(timesteps=total_timesteps)
 
-# =================== Validation set ====================== #
-L_valid = 270 # number of validation samples
+# ======================================== Validation set preparation ===================================== #
 
-# locations of training data
-BATCH_dir = '/glade/campaign/cisl/aiml/ksha/BATCH_Diffusion/'
+# location of training data
+BATCH_dir = '/glade/campaign/cisl/aiml/ksha/BATCH_GFS_VALID/'
 
-# preparing training batches
-filenames = np.array(sorted(glob(BATCH_dir+'valid*.npy')))
+# validation set size
+L_valid = 500
 
-L = len(filenames)
-filename_valid = filenames[::5][:L_valid]
-filename_train = list(set(filenames) - set(filename_valid))
-
-L_train = len(filename_train)
+# collect validation set sampales
+filenames = np.array(sorted(glob(BATCH_dir+'*.npy')))
+filename_valid = filenames[::7][:L_valid]
 
 Y_valid = np.empty((L_valid,)+input_shape)
-X_valid = np.empty((L_valid,)+gfs_shape)
 
 for i, name in enumerate(filename_valid):
-    temp_data = np.load(name, allow_pickle=True)[()]
-    X_valid[i, ...] = F_x*temp_data['GFS_latent']
-    Y_valid[i, ...] = F_y*temp_data['Y_latent']
+    temp_data = np.load(name)
+    Y_valid[i, ...] = Fy*temp_data[0, ..., :2]
 
 # validate on random timesteps
 t_valid_ = np.random.uniform(low=0, high=total_timesteps, size=(L_valid,))
 t_valid = t_valid_.astype(int)
 
 # sample random noise to be added to the images in the batch
-noise_valid = np.random.normal(size=((L_valid,)+input_shape))
-images_valid = np.array(gdf_util.q_sample(Y_valid, t_valid, noise_valid))
+noise_valid = np.random.normal(size=((L_valid,)+(128, 128, 1)))
+images_valid_ = np.array(gdf_util.q_sample(Y_valid[..., 0][..., None], t_valid, noise_valid))
+images_valid = np.concatenate((images_valid_, Y_valid[..., 1][..., None]), axis=-1)
+# # validation prediction example:
+# # pred_noise = model.predict([images_valid, t_valid, X_valid])
 
-# validation prediction example:
-# pred_noise = model.predict([images_valid, t_valid, X_valid])
+# ================================== Training loop ================================== #
 
-# =================== Training loop ====================== #
+# collect training samples
+BATCH_dir = '/glade/campaign/cisl/aiml/ksha/BATCH_GFS_MRMS/'
+filename_train = np.array(sorted(glob(BATCH_dir+'*.npy')))
+L_train = len(filename_train)
 
 min_del = 0.0
 max_tol = 3 # early stopping with 2-epoch patience
 tol = 0
 
 Y_batch = np.empty((batch_size,)+input_shape)
-X_batch = np.empty((batch_size,)+gfs_shape)
 
 for i in range(epochs):
     
-    # collect all training batches
-    filenames = np.array(sorted(glob(BATCH_dir+'*.npy')))
-    filename_valid = np.array(sorted(glob(BATCH_dir+'valid*.npy')))
-    filename_train = list(set(filenames) - set(filename_valid))
-    L_train = len(filename_train)
-    
     print('epoch = {}'.format(i))
     if i == 0:
-        pred_noise = model.predict([images_valid, t_valid, X_valid])
+        pred_noise = model.predict([images_valid, t_valid])
         record = np.mean(np.abs(noise_valid - pred_noise))
         #print('initial loss {}'.format(record))
         print('Initial validation loss: {}'.format(record))
@@ -229,10 +197,9 @@ for i in range(epochs):
         for k, ind in enumerate(inds_):
             # import batch data
             temp_name = filename_train[ind]
-            temp_data = np.load(temp_name, allow_pickle=True)[()]
-            X_batch[k, ...] = F_x*temp_data['GFS_latent']
-            Y_batch[k, ...] = F_y*temp_data['Y_latent']
-
+            temp_data = np.load(temp_name)
+            Y_batch[k, ...] = Fy*temp_data[0, ..., :2]
+        
         # sample timesteps uniformly
         t_ = np.random.uniform(low=0, high=total_timesteps, size=(batch_size,))
         t = t_.astype(int)
@@ -241,11 +208,16 @@ for i in range(epochs):
         noise = np.random.normal(size=(batch_size,)+input_shape)
         images_t = np.array(gdf_util.q_sample(Y_batch, t, noise))
         
+        # sample random noise to be added to the images in the batch
+        noise = np.random.normal(size=((batch_size,)+(128, 128, 1)))
+        images_t_ = np.array(gdf_util.q_sample(Y_batch[..., 0][..., None], t, noise))
+        images_t = np.concatenate((images_t_, Y_batch[..., 1][..., None]), axis=-1)
+        
         # train on batch
-        model.train_on_batch([images_t, t, X_batch], noise)
+        model.train_on_batch([images_t, t], noise)
         
     # on epoch-end
-    pred_noise = model.predict([images_valid, t_valid, X_valid])
+    pred_noise = model.predict([images_valid, t_valid])
     record_temp = np.mean(np.abs(noise_valid - pred_noise))
     
     # print out valid loss change
@@ -260,6 +232,9 @@ for i in range(epochs):
 
     print("--- %s seconds ---" % (time.time() - start_time))
     # mannual callbacks
+
+
+
 
 
 
