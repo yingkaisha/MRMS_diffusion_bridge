@@ -462,8 +462,8 @@ with h5py.File(name_gfs.format(year, ini, lead), 'r') as h5io:
 with h5py.File(name_apcp.format(year, ini, lead), 'r') as h5io:
     APCP = h5io['APCP'][...]
     
-for i in range(day_start, day_end, 1):
-    day = i + day_start
+for day in range(day_start, day_end, 1):
+    
     name_ = name_save .format(day, ini, lead)
     if os.path.isfile(name_) is False:
         
@@ -599,16 +599,20 @@ for i in range(day_start, day_end, 1):
                             MRMS_true[count, ...] = data[:, ix0:ix1, iy0:iy1, 0]
                             APCP_true[count, ...] = data[:, ix0:ix1, iy0:iy1, 1]
                             count += 1
+
+                dict_save = {}
+                dict_save['MRMS_pred'] = MRMS_pred
+                dict_save['MRMS_true'] = MRMS_true
+                dict_save['APCP_true'] = APCP_true
+                print(name_)
+                np.save(name_, dict_save)
+                print("--- %s seconds ---" % (time.time() - start_time))
+                
             else:
                 # MRMS is NaN
-                print("MRMS missing")
+                print("MRMS missing on day {}".format(day))
                 
-        dict_save = {}
-        dict_save['MRMS_pred'] = MRMS_pred
-        dict_save['MRMS_true'] = MRMS_true
-        dict_save['APCP_true'] = APCP_true
+
         
-        print(name_)
-        np.save(name_, dict_save)
-        print("--- %s seconds ---" % (time.time() - start_time))
+
 
