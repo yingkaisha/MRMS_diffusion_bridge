@@ -30,7 +30,7 @@ from namelist import *
 import data_utils as du
 import model_utils as mu
 
-# ============================= Hyperparameters ============================= #
+# ====================== Hyperparameters =================== #
 
 total_timesteps = 50 # diffusion time steps
 norm_groups = 8 # number of attention heads, number of layer normalization groups 
@@ -41,28 +41,28 @@ clip_max = 1.0
 
 Fy = 1/np.log(100+1) # max precip 100 mm
 
-widths = [16, 32, 48, 64] # number of convolution kernels per up-/downsampling level
-left_attention = [False, False, True, True] # True: use multi-head attnetion on each up-/downsampling level
-right_attention = [False, False, True, True]
-num_res_blocks = 1  # Number of residual blocks
+widths = [64, 96, 128, 256] # number of convolution kernels per up-/downsampling level
+left_attention = [False, True, True, True] # True: use multi-head attnetion on each up-/downsampling level
+right_attention = [False, True, True, True]
+num_res_blocks = 2  # Number of residual blocks
 
-input_shape = (128, 128, 2) # the tensor shape of reverse diffusion input
+input_shape = (64, 64, 9) # the tensor shape of reverse diffusion input
 
 load_weights = True # True: load previous weights
 
 # location of the previous weights
-model_name = '/glade/work/ksha/GAN/models/DM_example_tune/'
+model_name = '/glade/work/ksha/GAN/models/DM_example_64_base/'
 # location for saving new weights
-model_name_save = '/glade/work/ksha/GAN/models/DM_example_tune2/'
+model_name_save = '/glade/work/ksha/GAN/models/DM_example_64_base/'
 
-lr = 1e-5 # learning rate
+lr = 1e-4 # learning rate
 
 # samples per epoch = N_batch * batch_size
 epochs = 99999
 N_batch = 128
 batch_size = 32
 
-# ============================= Model design ============================= #
+# ========================== Model design =========================== #
 
 def build_model(input_shape, widths, left_attention, right_attention, num_res_blocks=2, norm_groups=8,
                 interpolation="nearest", activation_fn=keras.activations.swish,):
@@ -135,41 +135,40 @@ if load_weights:
 # configure the forward diffusion steps
 gdf_util = mu.GaussianDiffusion(timesteps=total_timesteps)
 
-# ======================================== Validation set preparation ===================================== #
+# ======================= Validation set preparation ====================== #
 
 # location of training data
-BATCH_dir = '/glade/campaign/cisl/aiml/ksha/BATCH_GFS_VALID/'
+BATCH_dir = '/glade/campaign/cisl/aiml/ksha/BATCH_GFS_VALID_64/'
 
 # validation set size
 L_valid = 500
 
 # collect validation set sampales
 filenames = np.array(sorted(glob(BATCH_dir+'*.npy')))
-filename_valid = filenames[::7][:L_valid]
+filename_valid = filenames[::200][:L_valid]
 
 Y_valid = np.empty((L_valid,)+input_shape)
 
 for i, name in enumerate(filename_valid):
     temp_data = np.load(name)
-    Y_valid[i, ...] = Fy*temp_data[0, ..., :2]
+    Y_valid[i, ...] = temp_data[0, ...]
+
+Y_valid[..., :2] = 2*(Fy*Y_valid[..., :2]-0.5)
+
+temp_apcp = Y_valid[..., :2]
+temp_apcp[temp_apcp>1] = 1
+Y_valid[..., :2] = temp_apcp
 
 # validate on random timesteps
 t_valid_ = np.random.uniform(low=0, high=total_timesteps, size=(L_valid,))
 t_valid = t_valid_.astype(int)
 
 # sample random noise to be added to the images in the batch
-noise_valid = np.random.normal(size=((L_valid,)+(128, 128, 1)))
+noise_valid = np.random.normal(size=((L_valid,)+(64, 64, 1)))
 images_valid_ = np.array(gdf_util.q_sample(Y_valid[..., 0][..., None], t_valid, noise_valid))
-images_valid = np.concatenate((images_valid_, Y_valid[..., 1][..., None]), axis=-1)
-# # validation prediction example:
-# # pred_noise = model.predict([images_valid, t_valid, X_valid])
+images_valid = np.concatenate((images_valid_, Y_valid[..., 1:]), axis=-1)
 
-# ================================== Training loop ================================== #
-
-# collect training samples
-BATCH_dir = '/glade/campaign/cisl/aiml/ksha/BATCH_GFS_MRMS/'
-filename_train = np.array(sorted(glob(BATCH_dir+'*.npy')))
-L_train = len(filename_train)
+# ========================== Training loop ============================ #
 
 min_del = 0.0
 max_tol = 3 # early stopping with 2-epoch patience
@@ -179,6 +178,11 @@ Y_batch = np.empty((batch_size,)+input_shape)
 
 for i in range(epochs):
     
+    # collect training samples
+    BATCH_dir = '/glade/campaign/cisl/aiml/ksha/BATCH_GFS_64/'
+    filename_train = np.array(sorted(glob(BATCH_dir+'*.npy')))
+    L_train = len(filename_train)
+
     print('epoch = {}'.format(i))
     if i == 0:
         pred_noise = model.predict([images_valid, t_valid])
@@ -198,7 +202,13 @@ for i in range(epochs):
             # import batch data
             temp_name = filename_train[ind]
             temp_data = np.load(temp_name)
-            Y_batch[k, ...] = Fy*temp_data[0, ..., :2]
+            Y_batch[k, ...] = temp_data[0, ...]
+            
+        Y_batch[..., :2] = 2*(Fy*Y_batch[..., :2]-0.5)
+        
+        temp_apcp = Y_batch[..., :2]
+        temp_apcp[temp_apcp>1] = 1
+        Y_batch[..., :2] = temp_apcp
         
         # sample timesteps uniformly
         t_ = np.random.uniform(low=0, high=total_timesteps, size=(batch_size,))
@@ -209,9 +219,9 @@ for i in range(epochs):
         images_t = np.array(gdf_util.q_sample(Y_batch, t, noise))
         
         # sample random noise to be added to the images in the batch
-        noise = np.random.normal(size=((batch_size,)+(128, 128, 1)))
+        noise = np.random.normal(size=((batch_size,)+(64, 64, 1)))
         images_t_ = np.array(gdf_util.q_sample(Y_batch[..., 0][..., None], t, noise))
-        images_t = np.concatenate((images_t_, Y_batch[..., 1][..., None]), axis=-1)
+        images_t = np.concatenate((images_t_, Y_batch[..., 1:]), axis=-1)
         
         # train on batch
         model.train_on_batch([images_t, t], noise)
@@ -232,6 +242,9 @@ for i in range(epochs):
 
     print("--- %s seconds ---" % (time.time() - start_time))
     # mannual callbacks
+
+
+
 
 
 
