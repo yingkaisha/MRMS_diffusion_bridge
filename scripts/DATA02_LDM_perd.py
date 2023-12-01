@@ -43,6 +43,7 @@ parser.add_argument('day0', help='day0')
 parser.add_argument('day1', help='day1')
 args = vars(parser.parse_args())
 
+# Hyperparameters
 # ============================================= #
 ini = int(args['ini'])
 lead = int(args['lead'])
@@ -441,9 +442,7 @@ date_list = [base + timedelta(days=d) for d in range(N_days)]
 name_gfs = '/glade/campaign/cisl/aiml/ksha/GFS/GFS_{}_ini{:02d}_f{:02d}.hdf'
 name_apcp = '/glade/campaign/cisl/aiml/ksha/GFS/GFS_APCP_{}_ini{:02d}_f{:02d}.hdf'
 name_MRMS = '/glade/campaign/cisl/aiml/ksha/GFS/MRMS_y{}.hdf'
-
-name_save = '/glade/campaign/cisl/aiml/ksha/LDM_results/LDM_day{:03d}_ini{:02d}_lead{:02d}.npy'
-
+name_save = '/glade/campaign/cisl/aiml/ksha/LDM_results_train/LDM_FULL_day{:03d}_ini{:02d}_lead{:02d}.npy'
 
 # ------- Import data ------- #
 with h5py.File(name_MRMS.format(year), 'r') as h5io:
@@ -474,21 +473,22 @@ for day in range(day_start, day_end, 1):
         if N_hours < N_total:
             
             # ------- data allocations ------- #
-            data = np.empty((1, x_mrms, y_mrms, 9))
-            data[...] = np.nan
-            
-            gfs = np.empty((1, x_gfs, y_gfs, 7))
-            gfs[...] = np.nan
+            data = np.empty((1, x_mrms, y_mrms, 9)); data[...] = np.nan
+            gfs = np.empty((1, x_gfs, y_gfs, 7)); gfs[...] = np.nan
             
             MRMS_pred = np.empty((N_ens, Nx_pred*Ny_pred, size_pred, size_pred,)); MRMS_pred[...] = np.nan
             MRMS_true = np.empty((Nx_pred*Ny_pred, size_pred, size_pred,)); MRMS_true[...] = np.nan
             APCP_true = np.empty((Nx_pred*Ny_pred, size_pred, size_pred,)); APCP_true[...] = np.nan
+
+            LDM_latent = np.empty((N_ens, Nx_pred*Ny_pred,)+input_shape); LDM_latent[...] = np.nan
+            MRMS_latent = np.empty((Nx_pred*Ny_pred,)+input_shape); MRMS_latent[...] = np.nan
+            APCP_latent = np.empty((Nx_pred*Ny_pred,)+input_shape); APCP_latent[...] = np.nan
         
             # ----- data pre-processing ----- #
-            
             MRMS_temp = MRMS[N_hours, ...] + MRMS[N_hours-1, ...] + MRMS[N_hours-2, ...]
+            
             # if MRMS has no NaNs
-            if np.sum(np.isnan(MRMS_temp)) == 0 and np.sum(np.isnan(APCP[day, ...])) == 0:
+            if np.sum(np.isnan(MRMS_temp)) == 0:
                 
                 gfs[..., 0] = APCP[day, ...]
                 gfs[..., 1] = CAPE[day, ...]
@@ -529,6 +529,7 @@ for day in range(day_start, day_end, 1):
                 # index 8: elevation
                 data[..., 8] = elev_01 # normalized elevatino
                 count = 0
+    
                 for px in range(Nx_pred):
                     for py in range(Ny_pred):
                         ix0 = size_pred*px
@@ -540,17 +541,15 @@ for day in range(day_start, day_end, 1):
                         else:
                             iy1 = y_mrms
                             iy0 = y_mrms - size_pred
-
+    
                         # if MRMS is all-zeros, return all-zeros directly
-                        #gfs_ = data[:, ix0:ix1, iy0:iy1, 1]
                         mrms_ = data[:, ix0:ix1, iy0:iy1, 1]
                         flag_rain = np.sum(mrms_ > 1e-3) > thres_zero_mask
                         flag_heavy = np.max(mrms_) >= thres_high_precip
                         
                         if np.logical_or(flag_rain, flag_heavy):
-
+    
                             # ---------- GFS embedding -------- #
-                            #print('[{}:{}, {}:{}]'.format(ix0, ix1, iy0, iy1))
                             data_gfs_in = data[:, ix0:ix1, iy0:iy1, 1:]
                             lead_t = lead*np.ones(1,)
                             GFS_latent = model_encoder_gfs.predict([data_gfs_in, lead_t], verbose=0)
@@ -560,15 +559,17 @@ for day in range(day_start, day_end, 1):
                             
                             # ---------- LDM prediction ------- #
                             # forward diffuse GFS APCP
-                            Y_latent_APCP = model_encoder_mrms.predict(data[:, ix0:ix1, iy0:iy1, 1][..., None], verbose=0)
                             Y_latent_MRMS = model_encoder_mrms.predict(data[:, ix0:ix1, iy0:iy1, 0][..., None], verbose=0)
+                            Y_latent_APCP = model_encoder_mrms.predict(data[:, ix0:ix1, iy0:iy1, 1][..., None], verbose=0)
+                            # backup
+                            MRMS_latent[count, ...] = Y_latent_MRMS[0, ...]
+                            APCP_latent[count, ...] = Y_latent_APCP[0, ...]
                             
                             # re-scale for LDM (Fy = 1/6.3)
                             Y_latent_APCP = F_y*Y_latent_APCP
                             Y_latent_MRMS = F_y*Y_latent_MRMS
                             
-                            # diffusion steps
-                            
+                            # diffusion inference
                             t_diffuse_ = (T)*np.ones(1)
                             t_diffuse = t_diffuse_.astype(int)
                             
@@ -580,14 +581,13 @@ for day in range(day_start, day_end, 1):
                 
                                 # reverse diffusion (~15sec per 128-by-128 sample)
                                 Y_pred = reverse_diffuse(model, forward_diffuse, GFS_latent, T, gdf_util)
-                
+                                # backup
+                                LDM_latent[n, count, ...] = Y_pred[0, ...]/F_y
                                 # scale back
                                 Y_pred = 0.8*Y_pred/F_y + 0.2*Y_latent_MRMS/F_y
                                 
                                 # -------- VQ-VAE decode -------- #
                                 MRMS_pred_ = model_decoder_mrms.predict(Y_pred, verbose=0)
-                                #MRMS_true_ = data[:, ix0:ix1, iy0:iy1, 0][..., None]
-                
                                 MRMS_pred[n, count, ...] = np.mean(MRMS_pred_[...], axis=-1)
                                 
                             MRMS_true[count, ...] = data[:, ix0:ix1, iy0:iy1, 0]
@@ -599,19 +599,22 @@ for day in range(day_start, day_end, 1):
                             MRMS_true[count, ...] = data[:, ix0:ix1, iy0:iy1, 0]
                             APCP_true[count, ...] = data[:, ix0:ix1, iy0:iy1, 1]
                             count += 1
-
-                dict_save = {}
-                dict_save['MRMS_pred'] = MRMS_pred
-                dict_save['MRMS_true'] = MRMS_true
-                dict_save['APCP_true'] = APCP_true
-                print(name_)
-                np.save(name_, dict_save)
-                print("--- %s seconds ---" % (time.time() - start_time))
-                
+                        
             else:
                 # MRMS is NaN
-                print("MRMS missing on day {}".format(day))
+                print("MRMS missing")
                 
+            dict_save = {}
+            dict_save['LDM_latent'] = LDM_latent
+            dict_save['MRMS_latent'] = MRMS_latent
+            dict_save['APCP_latent'] = APCP_latent
+            dict_save['MRMS_pred'] = MRMS_pred
+            dict_save['MRMS_true'] = MRMS_true
+            dict_save['APCP_true'] = APCP_true
+            
+            print(name_)
+            np.save(name_, dict_save)
+            print("--- %s seconds ---" % (time.time() - start_time))
 
         
 
