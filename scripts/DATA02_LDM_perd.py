@@ -57,6 +57,9 @@ T = 20
 N_ens = 10
 thres_zero_mask = 0
 thres_high_precip = 2.4
+
+name_save = '/glade/campaign/cisl/aiml/ksha/LDM_results_train/LDM_FULL_day{:03d}_ini{:02d}_lead{:02d}.npy'
+
 # ============================================= #
 
 def norm_precip(x):
@@ -442,7 +445,7 @@ date_list = [base + timedelta(days=d) for d in range(N_days)]
 name_gfs = '/glade/campaign/cisl/aiml/ksha/GFS/GFS_{}_ini{:02d}_f{:02d}.hdf'
 name_apcp = '/glade/campaign/cisl/aiml/ksha/GFS/GFS_APCP_{}_ini{:02d}_f{:02d}.hdf'
 name_MRMS = '/glade/campaign/cisl/aiml/ksha/GFS/MRMS_y{}.hdf'
-name_save = '/glade/campaign/cisl/aiml/ksha/LDM_results_train/LDM_FULL_day{:03d}_ini{:02d}_lead{:02d}.npy'
+
 
 # ------- Import data ------- #
 with h5py.File(name_MRMS.format(year), 'r') as h5io:
@@ -463,7 +466,7 @@ with h5py.File(name_apcp.format(year, ini, lead), 'r') as h5io:
     
 for day in range(day_start, day_end, 1):
     
-    name_ = name_save .format(day, ini, lead)
+    name_ = name_save.format(day, ini, lead)
     if os.path.isfile(name_) is False:
         
         start_time = time.time()
