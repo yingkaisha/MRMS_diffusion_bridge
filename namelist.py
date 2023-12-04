@@ -6,6 +6,7 @@ NCAR_dir = '/glade/work/ksha/NCAR/'
 
 data_dir = '/glade/work/ksha/GAN/'
 save_dir = '/glade/work/ksha/GAN/'
+result_dir = '/glade/work/ksha/GAN_result/'
 save_dir_campaign = '/glade/campaign/cisl/aiml/ksha/'
 
 BATCH_dir = '/glade/campaign/cisl/aiml/ksha/BATCH_GFS/'
