@@ -3,6 +3,8 @@
 *.out
 *.err
 old/*
+scripts/old/*
+
 qsub/*
 qsub/*.out
 qsbu/*.err
