@@ -42,9 +42,10 @@ input_shape = (32, 32, 8) # the tensor shape of reverse diffusion input
 gfs_shape = (128, 128, 8) # the tensor shape of GFS embeddings
 
 widths = [64, 96, 128, 256] # number of convolution kernels per up-/downsampling level
+feature_sizes = [32, 16, 8, 4]
 
 left_attention = [False, False, True, True] # True: use multi-head attnetion on each up-/downsampling level
-right_attention = [False, False, True, True]
+right_attention = [False, False, False, False]
 num_res_blocks = 2  # Number of residual blocks
 
 F_y = 1/6.3 # the scale of VQ-VAE codes
@@ -54,34 +55,32 @@ N_atten2 = np.sum(right_attention)
 
 load_weights = True # True: load previous weights
 # location of the previous weights
-model_name = '/glade/work/ksha/GAN/models/LDM_resize_atten{}-{}_res{}_base/'.format(
+model_name = '/glade/work/ksha/GAN/models/LDM_resize_half-atten{}-{}_res{}_tune4/'.format(
     N_atten1, N_atten2, num_res_blocks)
 
 # location for saving new weights
-model_name_save = '/glade/work/ksha/GAN/models/LDM_resize_atten{}-{}_res{}_tune/'.format(
+model_name_save = '/glade/work/ksha/GAN/models/LDM_resize_half-atten{}-{}_res{}_tune5/'.format(
     N_atten1, N_atten2, num_res_blocks)
 
-lr = 1e-4 # learning rate
+lr = 1e-5 # learning rate
 
 # samples per epoch = N_batch * batch_size
 epochs = 99999
 N_batch = 128
 batch_size = 32
 
-def build_model(input_shape, gfs_shape, widths, left_attention, right_attention, num_res_blocks=2, norm_groups=8,
+def build_model(input_shape, gfs_shape, widths, feature_sizes, left_attention, right_attention, num_res_blocks=2, norm_groups=8,
                 interpolation='bilinear', activation_fn=keras.activations.swish,):
 
     first_conv_channels = widths[0]
     
     image_input = layers.Input(shape=input_shape, name="image_input")
-    
+    time_input = keras.Input(shape=(), dtype=tf.int64, name="time_input")
     gfs_input = layers.Input(shape=gfs_shape, name="gfs_input")
-    x_gfs = layers.Resizing(32, 32, interpolation='bilinear')(gfs_input)
-    x = layers.Concatenate()([image_input, x_gfs])
+    
     x = layers.Conv2D(first_conv_channels, kernel_size=(3, 3), padding="same",
                       kernel_initializer=mu.kernel_init(1.0),)(image_input)
-    
-    time_input = keras.Input(shape=(), dtype=tf.int64, name="time_input")
+
     temb = mu.TimeEmbedding(dim=first_conv_channels * 4)(time_input)
     temb = mu.TimeMLP(units=first_conv_channels * 4, activation_fn=activation_fn)(temb)
 
@@ -94,7 +93,20 @@ def build_model(input_shape, gfs_shape, widths, left_attention, right_attention,
             x = mu.ResidualBlock(widths[i], groups=norm_groups, activation_fn=activation_fn)([x, temb])
             
             if has_attention[i]:
-                x = layers.MultiHeadAttention(num_heads=norm_groups, key_dim=widths[i])(x, x)
+                # GFS cross-attention inputs
+                size_ = feature_sizes[i]
+                x_gfs = gfs_input
+                x_gfs = layers.Resizing(size_, size_, interpolation='bilinear')(x_gfs)
+
+                x_gfs = layers.Conv2D(int(0.5*widths[i]), kernel_size=(3, 3), padding="same",)(x_gfs)
+                x_gfs = layers.GroupNormalization(groups=norm_groups)(x_gfs)
+                x_gfs = activation_fn(x_gfs)
+
+                x_gfs = layers.Conv2D(widths[i], kernel_size=(3, 3), padding="same",)(x_gfs)
+                x_gfs = layers.GroupNormalization(groups=norm_groups)(x_gfs)
+                x_gfs = activation_fn(x_gfs)
+                
+                x = layers.MultiHeadAttention(num_heads=norm_groups, key_dim=widths[i])(x, x_gfs)
                 
             skips.append(x)
 
@@ -104,7 +116,21 @@ def build_model(input_shape, gfs_shape, widths, left_attention, right_attention,
 
     # MiddleBlock
     x = mu.ResidualBlock(widths[-1], groups=norm_groups, activation_fn=activation_fn)([x, temb])
-    x = layers.MultiHeadAttention(num_heads=norm_groups, key_dim=widths[-1])(x, x)
+    
+    size_ = feature_sizes[-1]
+    x_gfs = gfs_input
+    x_gfs = layers.Resizing(size_, size_, interpolation='bilinear')(x_gfs)
+    
+    x_gfs = layers.Conv2D(int(0.5*widths[-1]), kernel_size=(3, 3), padding="same",)(x_gfs)
+    x_gfs = layers.GroupNormalization(groups=norm_groups)(x_gfs)
+    x_gfs = activation_fn(x_gfs)
+
+    x_gfs = layers.Conv2D(widths[-1], kernel_size=(3, 3), padding="same",)(x_gfs)
+    x_gfs = layers.GroupNormalization(groups=norm_groups)(x_gfs)
+    x_gfs = activation_fn(x_gfs)
+    
+    x = layers.MultiHeadAttention(num_heads=norm_groups, key_dim=widths[-1])(x, x_gfs)
+    
     x = mu.ResidualBlock(widths[-1], groups=norm_groups, activation_fn=activation_fn)([x, temb])
 
     # UpBlock
@@ -115,7 +141,21 @@ def build_model(input_shape, gfs_shape, widths, left_attention, right_attention,
             x = mu.ResidualBlock(widths[i], groups=norm_groups, activation_fn=activation_fn)([x, temb])
             
             if has_attention[i]:
-                x = layers.MultiHeadAttention(num_heads=norm_groups, key_dim=widths[i])(x, x)
+                raegaer5
+                # GFS cross-attention inputs
+                size_ = feature_sizes[i]
+                x_gfs = gfs_input
+                x_gfs = layers.Resizing(size_, size_, interpolation='bilinear')(x_gfs)
+
+                x_gfs = layers.Conv2D(int(0.5*widths[i]), kernel_size=(3, 3), padding="same",)(x_gfs)
+                x_gfs = layers.GroupNormalization(groups=norm_groups)(x_gfs)
+                x_gfs = activation_fn(x_gfs)
+
+                x_gfs = layers.Conv2D(widths[i], kernel_size=(3, 3), padding="same",)(x_gfs)
+                x_gfs = layers.GroupNormalization(groups=norm_groups)(x_gfs)
+                x_gfs = activation_fn(x_gfs)
+                
+                x = layers.MultiHeadAttention(num_heads=norm_groups, key_dim=widths[i])(x, x_gfs)
                 
         if i != 0:
             x = mu.UpSample(widths[i], interpolation=interpolation)(x)
@@ -128,7 +168,7 @@ def build_model(input_shape, gfs_shape, widths, left_attention, right_attention,
 
 # Reverse diffusino model
 model = build_model(input_shape=input_shape, gfs_shape=gfs_shape, widths=widths, 
-                    left_attention=left_attention, right_attention=right_attention, 
+                    feature_sizes=feature_sizes, left_attention=left_attention, right_attention=right_attention, 
                     num_res_blocks=num_res_blocks, norm_groups=norm_groups, activation_fn=keras.activations.swish)
 
 # Compile the mdoel
@@ -169,13 +209,20 @@ t_valid = t_valid_.astype(int)
 noise_valid = np.random.normal(size=((L_valid,)+input_shape))
 images_valid = np.array(gdf_util.q_sample(Y_valid, t_valid, noise_valid))
 
-# validation prediction example:
-# pred_noise = model.predict([images_valid, t_valid, X_valid])
+# collect all training batches
+# filenames = np.array(sorted(glob(BATCH_dir+'*.npy')))
+# filename_valid = np.array(sorted(glob(BATCH_dir+'*2023*.npy')))
+# filename_train = list(set(filenames) - set(filename_valid))
+# L_train = len(filename_train)
 
 # collect all training batches
 filenames = np.array(sorted(glob(BATCH_dir+'*.npy')))
 filename_valid = np.array(sorted(glob(BATCH_dir+'*2023*.npy')))
 filename_train = list(set(filenames) - set(filename_valid))
+
+BATCH_dir_extra = '/glade/campaign/cisl/aiml/ksha/BATCH_Diffusion_RAW_extra/'
+filenames_extra = np.array(sorted(glob(BATCH_dir_extra+'*.npy')))
+filename_train = list(filename_train) + list(filenames_extra)
 L_train = len(filename_train)
 
 min_del = 0.0
@@ -236,6 +283,4 @@ for i in range(epochs):
 
     print("--- %s seconds ---" % (time.time() - start_time))
     # mannual callbacks
-
-
 

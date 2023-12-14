@@ -55,14 +55,14 @@ N_atten2 = np.sum(right_attention)
 
 load_weights = True # True: load previous weights
 # location of the previous weights
-model_name = '/glade/work/ksha/GAN/models/LDM_resize{}-{}_res{}_base/'.format(
+model_name = '/glade/work/ksha/GAN/models/LDM_resize{}-{}_res{}_tune6/'.format(
     N_atten1, N_atten2, num_res_blocks)
 
 # location for saving new weights
-model_name_save = '/glade/work/ksha/GAN/models/LDM_resize{}-{}_res{}_tune/'.format(
+model_name_save = '/glade/work/ksha/GAN/models/LDM_resize{}-{}_res{}_tune7/'.format(
     N_atten1, N_atten2, num_res_blocks)
 
-lr = 1e-4 # learning rate
+lr = 1e-5 # learning rate
 
 # samples per epoch = N_batch * batch_size
 epochs = 99999
@@ -210,14 +210,22 @@ t_valid = t_valid_.astype(int)
 noise_valid = np.random.normal(size=((L_valid,)+input_shape))
 images_valid = np.array(gdf_util.q_sample(Y_valid, t_valid, noise_valid))
 
-# validation prediction example:
-# pred_noise = model.predict([images_valid, t_valid, X_valid])
+# collect all training batches
+# filenames = np.array(sorted(glob(BATCH_dir+'*.npy')))
+# filename_valid = np.array(sorted(glob(BATCH_dir+'*2023*.npy')))
+# filename_train = list(set(filenames) - set(filename_valid))
+# L_train = len(filename_train)
 
 # collect all training batches
 filenames = np.array(sorted(glob(BATCH_dir+'*.npy')))
 filename_valid = np.array(sorted(glob(BATCH_dir+'*2023*.npy')))
 filename_train = list(set(filenames) - set(filename_valid))
+
+BATCH_dir_extra = '/glade/campaign/cisl/aiml/ksha/BATCH_Diffusion_RAW_extra/'
+filenames_extra = np.array(sorted(glob(BATCH_dir_extra+'*.npy')))
+filename_train = list(filename_train) + list(filenames_extra)
 L_train = len(filename_train)
+
 
 min_del = 0.0
 max_tol = 3 # early stopping with 2-epoch patience
