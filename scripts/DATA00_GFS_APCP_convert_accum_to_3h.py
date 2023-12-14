@@ -17,9 +17,9 @@ from namelist import *
 import data_utils as du
 
 # --------- #
-year = 2023
-LEADs = [6, 9, 12, 15, 18, 21, 24, 27, 30, 33, 36] # forecast lead time [hr]
-INIs = [0, 6, 12, 18] # initialization times [UTC hrs]
+year = 2021
+LEADs = np.arange(6, 168+3, 3) #[6, 9, 12, 15, 18, 21, 24, 27, 30, 33, 36] # forecast lead time [hr]
+INIs = [0,] # initialization times [UTC hrs]
 
 # LEADs = [6, 9, 12,] # forecast lead time [hr]
 # INIs = [6, 12, 18] # initialization times [UTC hrs]
@@ -52,11 +52,16 @@ for ini in INIs:
         
         if np.sum(data<0) > 0:
             print("warning: negative precip {} [mm] dectected on ini{} lead{}".format(np.min(data), ini, lead))
-            flag_neg = data<0
+            
+            # identify negtive precip
+            flag_neg = data < 0
+            # identify NaN precip
             flag_nan = np.isnan(data)
+            # ----- GFS APCP corrections ----- #
             data[flag_neg] = 0
             data[flag_nan] = np.nan
-            
+            # -------------------------------- #
+        
         tuple_save = (data,)
         label_save = ['APCP',]
         du.save_hdf5(tuple_save, label_save, '/glade/campaign/cisl/aiml/ksha/GFS/', name_save.format(year, ini, lead))
