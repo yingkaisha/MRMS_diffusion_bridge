@@ -55,11 +55,11 @@ N_atten2 = np.sum(right_attention)
 
 load_weights = True # True: load previous weights
 # location of the previous weights
-model_name = '/glade/work/ksha/GAN/models/LDM_resize{}-{}_res{}_tune6/'.format(
+model_name = '/glade/work/ksha/GAN/models/LDM_resize{}-{}_res{}_tune7/'.format(
     N_atten1, N_atten2, num_res_blocks)
 
 # location for saving new weights
-model_name_save = '/glade/work/ksha/GAN/models/LDM_resize{}-{}_res{}_tune7/'.format(
+model_name_save = '/glade/work/ksha/GAN/models/LDM_resize{}-{}_res{}_tune8/'.format(
     N_atten1, N_atten2, num_res_blocks)
 
 lr = 1e-5 # learning rate
