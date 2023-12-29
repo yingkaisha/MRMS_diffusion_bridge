@@ -58,7 +58,7 @@ N_ens = 10
 thres_zero_mask = 0
 thres_high_precip = 2.4
 
-name_save = '/glade/campaign/cisl/aiml/ksha/LDM_results_train/LDM_FULL_day{:03d}_ini{:02d}_lead{:02d}.npy'
+name_save = '/glade/campaign/cisl/aiml/ksha/LDM_results/LDM_FULL_day{:03d}_ini{:02d}_lead{:02d}.npy'
 
 # ============================================= #
 
@@ -101,7 +101,7 @@ def reverse_diffuse(model, x_in1, x_in2, total_timesteps, gdf_util):
 
     return x_out
 
-# ================= LDM ================= #
+# ==================================== Import LDM ====================================== #
 
 total_timesteps = 50 # diffusion time steps
 norm_groups = 8 # number of attention heads, number of layer normalization groups 
@@ -110,28 +110,30 @@ norm_groups = 8 # number of attention heads, number of layer normalization group
 clip_min = -1.0
 clip_max = 1.0
 
+input_shape = (32, 32, 8) # the tensor shape of reverse diffusion input
+gfs_shape = (128, 128, 8) # the tensor shape of GFS embeddings
+
 widths = [64, 96, 128, 256] # number of convolution kernels per up-/downsampling level
-left_attention = [False, True, True, True] # True: use multi-head attnetion on each up-/downsampling level
-right_attention = [False, True, True, True]
+feature_sizes = [32, 16, 8, 4]
+
+left_attention = [False, False, True, True] # True: use multi-head attnetion on each up-/downsampling level
+right_attention = [False, False, True, True]
 num_res_blocks = 2  # Number of residual blocks
 
-input_shape = (32, 32, 8) # the tensor shape of reverse diffusion input
-gfs_shape = (16, 16, 256) # the tensor shape of GFS embeddings
-
-F_x = 0.1 # the scale of GFS embeddings
 F_y = 1/6.3 # the scale of VQ-VAE codes
 
 N_atten1 = np.sum(left_attention)
 N_atten2 = np.sum(right_attention)
 
+load_weights = True # True: load previous weights
 # location of the previous weights
-model_name = '/glade/work/ksha/GAN/models/LDM_atten{}-{}_res{}_tune2/'.format(
+model_name = '/glade/work/ksha/GAN/models/LDM_resize{}-{}_res{}_tune10/'.format(
     N_atten1, N_atten2, num_res_blocks)
 
-lr = 0 # learning rate
+lr = 0
 
-def build_model(input_shape, gfs_shape, widths, left_attention, right_attention, num_res_blocks=2, norm_groups=8,
-                interpolation="nearest", activation_fn=keras.activations.swish,):
+def build_model(input_shape, gfs_shape, widths, feature_sizes, left_attention, right_attention, num_res_blocks=2, norm_groups=8,
+                interpolation='bilinear', activation_fn=keras.activations.swish,):
 
     first_conv_channels = widths[0]
     
@@ -154,7 +156,15 @@ def build_model(input_shape, gfs_shape, widths, left_attention, right_attention,
             x = mu.ResidualBlock(widths[i], groups=norm_groups, activation_fn=activation_fn)([x, temb])
             
             if has_attention[i]:
+                # GFS cross-attention inputs
+                size_ = feature_sizes[i]
                 x_gfs = gfs_input
+                x_gfs = layers.Resizing(size_, size_, interpolation='bilinear')(x_gfs)
+
+                x_gfs = layers.Conv2D(int(0.5*widths[i]), kernel_size=(3, 3), padding="same",)(x_gfs)
+                x_gfs = layers.GroupNormalization(groups=norm_groups)(x_gfs)
+                x_gfs = activation_fn(x_gfs)
+
                 x_gfs = layers.Conv2D(widths[i], kernel_size=(3, 3), padding="same",)(x_gfs)
                 x_gfs = layers.GroupNormalization(groups=norm_groups)(x_gfs)
                 x_gfs = activation_fn(x_gfs)
@@ -170,8 +180,15 @@ def build_model(input_shape, gfs_shape, widths, left_attention, right_attention,
     # MiddleBlock
     x = mu.ResidualBlock(widths[-1], groups=norm_groups, activation_fn=activation_fn)([x, temb])
     
+    size_ = feature_sizes[-1]
     x_gfs = gfs_input
-    x_gfs = layers.Conv2D(widths[i], kernel_size=(3, 3), padding="same",)(x_gfs)
+    x_gfs = layers.Resizing(size_, size_, interpolation='bilinear')(x_gfs)
+    
+    x_gfs = layers.Conv2D(int(0.5*widths[-1]), kernel_size=(3, 3), padding="same",)(x_gfs)
+    x_gfs = layers.GroupNormalization(groups=norm_groups)(x_gfs)
+    x_gfs = activation_fn(x_gfs)
+
+    x_gfs = layers.Conv2D(widths[-1], kernel_size=(3, 3), padding="same",)(x_gfs)
     x_gfs = layers.GroupNormalization(groups=norm_groups)(x_gfs)
     x_gfs = activation_fn(x_gfs)
     
@@ -187,13 +204,22 @@ def build_model(input_shape, gfs_shape, widths, left_attention, right_attention,
             x = mu.ResidualBlock(widths[i], groups=norm_groups, activation_fn=activation_fn)([x, temb])
             
             if has_attention[i]:
+                
+                # GFS cross-attention inputs
+                size_ = feature_sizes[i]
                 x_gfs = gfs_input
+                x_gfs = layers.Resizing(size_, size_, interpolation='bilinear')(x_gfs)
+
+                x_gfs = layers.Conv2D(int(0.5*widths[i]), kernel_size=(3, 3), padding="same",)(x_gfs)
+                x_gfs = layers.GroupNormalization(groups=norm_groups)(x_gfs)
+                x_gfs = activation_fn(x_gfs)
+
                 x_gfs = layers.Conv2D(widths[i], kernel_size=(3, 3), padding="same",)(x_gfs)
                 x_gfs = layers.GroupNormalization(groups=norm_groups)(x_gfs)
                 x_gfs = activation_fn(x_gfs)
                 
                 x = layers.MultiHeadAttention(num_heads=norm_groups, key_dim=widths[i])(x, x_gfs)
-
+                
         if i != 0:
             x = mu.UpSample(widths[i], interpolation=interpolation)(x)
 
@@ -204,8 +230,8 @@ def build_model(input_shape, gfs_shape, widths, left_attention, right_attention,
     return keras.Model([image_input, time_input, gfs_input], x, name="unet")
 
 # Reverse diffusino model
-model = build_model(input_shape=input_shape, gfs_shape=gfs_shape, widths=widths,
-                    left_attention=left_attention, right_attention=right_attention, 
+model = build_model(input_shape=input_shape, gfs_shape=gfs_shape, widths=widths, 
+                    feature_sizes=feature_sizes, left_attention=left_attention, right_attention=right_attention, 
                     num_res_blocks=num_res_blocks, norm_groups=norm_groups, activation_fn=keras.activations.swish)
 
 # Compile the mdoel
@@ -215,7 +241,7 @@ model.compile(loss=keras.losses.MeanAbsoluteError(), optimizer=keras.optimizers.
 W_old = mu.dummy_loader(model_name)
 model.set_weights(W_old)
 
-# ===================== Import VQ-VAE ==================== #
+# ============================================ Import VQ-VAE ============================================ #
 
 filter_nums = [64, 128] # number of convolution kernels per down-/upsampling layer 
 latent_dim = 8 # number of latent feature channels
@@ -308,116 +334,7 @@ vqvae_trainer.vqvae.set_weights(W_old)
 # compile
 vqvae_trainer.compile(optimizer=keras.optimizers.Adam(learning_rate=lr))
 
-# ===================== Import GFS embedding network ======================= #
-
-filter_nums = [64, 128, 256] # number of convolution kernels per down-/upsampling layer 
-
-# activation function
-activation = 'relu'
-activation_fn = keras.activations.relu
-
-# GFS input sizes
-input_size = (128, 128, 8)
-
-# Embedded GFS sizes
-latent_size = (16, 16, filter_nums[-1])
-
-# location of the previous weights
-model_name_load = '/glade/work/ksha/GAN/models/BC_{}_{}_{}_tune4'.format(filter_nums[0], filter_nums[1], activation)
-print('Loading {}'.format(model_name_load))
-
-lr = 0 # learning rate
-
-# ---------------- encoder ----------------- #
-# forecast lead time embeddings
-time_input = keras.Input(shape=(), dtype=tf.int64)
-temb = mu.TimeEmbedding(dim=filter_nums[0]*4)(time_input)
-temb = mu.TimeMLP(units=filter_nums[0]*4, activation_fn=activation_fn)(temb)
-
-encoder_in = keras.Input(shape=input_size)
-X = encoder_in
-
-X = layers.Conv2D(filter_nums[0], 3, padding="same")(X)
-X = layers.BatchNormalization()(X)
-X = layers.Activation(activation)(X)
-
-X = layers.Conv2D(filter_nums[0], 3, strides=2, padding="same")(X)
-X = layers.BatchNormalization()(X)
-X = layers.Activation(activation)(X)
-
-X = mu.ResidualBlock_base(filter_nums[0], activation_fn=activation_fn)([X, temb])
-X = mu.ResidualBlock_base(filter_nums[0], activation_fn=activation_fn)([X, temb])
-
-X = layers.Conv2D(filter_nums[1], 3, strides=2, padding="same")(X)
-X = layers.BatchNormalization()(X)
-X = layers.Activation(activation)(X)
-
-X = mu.ResidualBlock_base(filter_nums[1], activation_fn=activation_fn)([X, temb])
-X = mu.ResidualBlock_base(filter_nums[1], activation_fn=activation_fn)([X, temb])
-
-X = layers.Conv2D(filter_nums[2], 3, strides=2, padding="same")(X)
-X = layers.BatchNormalization()(X)
-X = layers.Activation(activation)(X)
-
-X = mu.ResidualBlock_base(filter_nums[2], activation_fn=activation_fn)([X, temb])
-X = mu.ResidualBlock_base(filter_nums[2], activation_fn=activation_fn)([X, temb])
-
-encoder_out = X
-
-model_encoder_gfs = keras.Model([encoder_in, time_input], encoder_out)
-
-# ---------------- decoder ----------------- #
-decoder_in = keras.Input(shape=latent_size)
-
-# forecast lead time embeddings
-time_input = keras.Input(shape=(), dtype=tf.int64)
-temb = mu.TimeEmbedding(dim=filter_nums[0]*4)(time_input)
-temb = mu.TimeMLP(units=filter_nums[0]*4, activation_fn=activation_fn)(temb)
-
-X = decoder_in
-
-X = layers.Conv2DTranspose(filter_nums[2], 3, strides=2, padding="same")(X)
-X = layers.BatchNormalization()(X)
-X = layers.Activation(activation)(X)
-
-X = mu.ResidualBlock_base(filter_nums[2], activation_fn=activation_fn)([X, temb])
-X = mu.ResidualBlock_base(filter_nums[2], activation_fn=activation_fn)([X, temb])
-
-X = layers.Conv2DTranspose(filter_nums[1], 3, strides=2, padding="same")(X)
-X = layers.BatchNormalization()(X)
-X = layers.Activation(activation)(X)
-
-X = mu.ResidualBlock_base(filter_nums[1], activation_fn=activation_fn)([X, temb])
-X = mu.ResidualBlock_base(filter_nums[1], activation_fn=activation_fn)([X, temb])
-
-X = layers.Conv2DTranspose(filter_nums[0], 3, strides=2, padding="same")(X)
-X = layers.BatchNormalization()(X)
-X = layers.Activation(activation)(X)
-
-X = mu.ResidualBlock_base(filter_nums[0], activation_fn=activation_fn)([X, temb])
-X = mu.ResidualBlock_base(filter_nums[0], activation_fn=activation_fn)([X, temb])
-
-decoder_out = layers.Conv2D(1, 1, padding="same")(X)
-
-model_decoder_gfs = keras.Model([decoder_in, time_input], decoder_out)
-
-# ---------------- combined ----------------- #
-# forecast lead time input
-time_input = keras.Input(shape=(), dtype=tf.int64)
-# GFS inputs
-IN = keras.Input(shape=input_size)
-# the mdoel
-X_encode = model_encoder_gfs([IN, time_input])
-OUT = model_decoder_gfs([X_encode, time_input])
-model_gfs = keras.Model([IN, time_input], OUT)
-# compile
-model_gfs.compile(loss=keras.losses.mean_absolute_error, optimizer=keras.optimizers.Adam(learning_rate=lr))
-
-# load weights
-W_old = mu.dummy_loader(model_name_load)
-model_gfs.set_weights(W_old)
-
-# ================================= Data preparation ================================= #
+# ======================================= Data preparation ================================== #
 
 # configure the forward diffusion steps
 gdf_util = mu.GaussianDiffusion(timesteps=total_timesteps)
@@ -428,6 +345,7 @@ with h5py.File(save_dir+'CNN_domain.hdf', 'r') as h5io:
     elev_01 = h5io['elev_01'][...]
     lon_GFS = h5io['lon_GFS'][...]
     lat_GFS = h5io['lat_GFS'][...]
+
 
 # data size info
 x_mrms = 256; y_mrms = 576 # 0.1 deg MRMS size
@@ -446,6 +364,9 @@ name_gfs = '/glade/campaign/cisl/aiml/ksha/GFS/GFS_{}_ini{:02d}_f{:02d}.hdf'
 name_apcp = '/glade/campaign/cisl/aiml/ksha/GFS/GFS_APCP_{}_ini{:02d}_f{:02d}.hdf'
 name_MRMS = '/glade/campaign/cisl/aiml/ksha/GFS/MRMS_y{}.hdf'
 
+name_save = '/glade/campaign/cisl/aiml/ksha/LDM_results/LDM_day{:03d}_ini{:02d}_lead{:02d}.npy'
+
+# ======================================= Main prediction loop =================================== #
 
 # ------- Import data ------- #
 with h5py.File(name_MRMS.format(year), 'r') as h5io:
@@ -466,7 +387,7 @@ with h5py.File(name_apcp.format(year, ini, lead), 'r') as h5io:
     
 for day in range(day_start, day_end, 1):
     
-    name_ = name_save.format(day, ini, lead)
+    name_ = name_save .format(day, ini, lead)
     if os.path.isfile(name_) is False:
         
         start_time = time.time()
@@ -476,20 +397,25 @@ for day in range(day_start, day_end, 1):
         if N_hours < N_total:
             
             # ------- data allocations ------- #
-            data = np.empty((1, x_mrms, y_mrms, 9)); data[...] = np.nan
-            gfs = np.empty((1, x_gfs, y_gfs, 7)); gfs[...] = np.nan
+            data = np.empty((1, x_mrms, y_mrms, 9))
+            data[...] = np.nan
+            
+            gfs = np.empty((1, x_gfs, y_gfs, 7))
+            gfs[...] = np.nan
             
             MRMS_pred = np.empty((N_ens, Nx_pred*Ny_pred, size_pred, size_pred,)); MRMS_pred[...] = np.nan
             MRMS_true = np.empty((Nx_pred*Ny_pred, size_pred, size_pred,)); MRMS_true[...] = np.nan
             APCP_true = np.empty((Nx_pred*Ny_pred, size_pred, size_pred,)); APCP_true[...] = np.nan
-
+    
             LDM_latent = np.empty((N_ens, Nx_pred*Ny_pred,)+input_shape); LDM_latent[...] = np.nan
+            LDM_latent_mrms = np.empty((Nx_pred*Ny_pred,)+input_shape); LDM_latent_mrms[...] = np.nan
+            
             MRMS_latent = np.empty((Nx_pred*Ny_pred,)+input_shape); MRMS_latent[...] = np.nan
             APCP_latent = np.empty((Nx_pred*Ny_pred,)+input_shape); APCP_latent[...] = np.nan
         
             # ----- data pre-processing ----- #
-            MRMS_temp = MRMS[N_hours, ...] + MRMS[N_hours-1, ...] + MRMS[N_hours-2, ...]
             
+            MRMS_temp = MRMS[N_hours, ...] + MRMS[N_hours-1, ...] + MRMS[N_hours-2, ...]
             # if MRMS has no NaNs
             if np.sum(np.isnan(MRMS_temp)) == 0:
                 
@@ -555,24 +481,21 @@ for day in range(day_start, day_end, 1):
                             # ---------- GFS embedding -------- #
                             data_gfs_in = data[:, ix0:ix1, iy0:iy1, 1:]
                             lead_t = lead*np.ones(1,)
-                            GFS_latent = model_encoder_gfs.predict([data_gfs_in, lead_t], verbose=0)
-                            
-                            # re-scale for LDM (Fx = 0.1) 
-                            GFS_latent = F_x*GFS_latent
                             
                             # ---------- LDM prediction ------- #
                             # forward diffuse GFS APCP
-                            Y_latent_MRMS = model_encoder_mrms.predict(data[:, ix0:ix1, iy0:iy1, 0][..., None], verbose=0)
                             Y_latent_APCP = model_encoder_mrms.predict(data[:, ix0:ix1, iy0:iy1, 1][..., None], verbose=0)
-                            # backup
-                            MRMS_latent[count, ...] = Y_latent_MRMS[0, ...]
-                            APCP_latent[count, ...] = Y_latent_APCP[0, ...]
+                            Y_latent_MRMS = model_encoder_mrms.predict(data[:, ix0:ix1, iy0:iy1, 0][..., None], verbose=0)
                             
                             # re-scale for LDM (Fy = 1/6.3)
                             Y_latent_APCP = F_y*Y_latent_APCP
                             Y_latent_MRMS = F_y*Y_latent_MRMS
+    
+                            MRMS_latent[count, ...] = Y_latent_MRMS[0, ...]
+                            APCP_latent[count, ...] = Y_latent_APCP[0, ...]
                             
-                            # diffusion inference
+                            # diffusion steps
+                            
                             t_diffuse_ = (T)*np.ones(1)
                             t_diffuse = t_diffuse_.astype(int)
                             
@@ -581,21 +504,32 @@ for day in range(day_start, day_end, 1):
                                 # sample random noise
                                 noise_ = np.random.normal(size=((1,)+input_shape))
                                 forward_diffuse = np.array(gdf_util.q_sample(Y_latent_APCP, t_diffuse, noise_))
-                
-                                # reverse diffusion (~15sec per 128-by-128 sample)
-                                Y_pred = reverse_diffuse(model, forward_diffuse, GFS_latent, T, gdf_util)
-                                # backup
-                                LDM_latent[n, count, ...] = Y_pred[0, ...]/F_y
-                                # scale back
-                                Y_pred = 0.8*Y_pred/F_y + 0.2*Y_latent_MRMS/F_y
                                 
+                                # reverse diffusion
+                                Y_pred = reverse_diffuse(model, forward_diffuse, data_gfs_in, T, gdf_util)
+                                
+                                # scale back
+                                Y_pred = Y_pred/F_y
+    
+                                # save LDM latent
+                                LDM_latent[n, count, ...] = Y_pred[0, ...]
+    
                                 # -------- VQ-VAE decode -------- #
                                 MRMS_pred_ = model_decoder_mrms.predict(Y_pred, verbose=0)
                                 MRMS_pred[n, count, ...] = np.mean(MRMS_pred_[...], axis=-1)
+                            
+                            # test LDM on MRMS
+                            forward_diffuse_mrms = np.array(gdf_util.q_sample(Y_latent_MRMS, t_diffuse, noise_))
+                            Y_pred_mrms = reverse_diffuse(model, forward_diffuse_mrms, data_gfs_in, T, gdf_util)
+                            
+                            Y_pred_mrms = Y_pred_mrms/F_y
+                            LDM_latent_mrms[count, ...] = Y_pred_mrms
+    
                                 
                             MRMS_true[count, ...] = data[:, ix0:ix1, iy0:iy1, 0]
                             APCP_true[count, ...] = data[:, ix0:ix1, iy0:iy1, 1]
                             count += 1
+                            
                         else:
                             print("all-zero precip detected")
                             MRMS_pred[n, count, ...] = 0
@@ -609,8 +543,11 @@ for day in range(day_start, day_end, 1):
                 
             dict_save = {}
             dict_save['LDM_latent'] = LDM_latent
+            dict_save['LDM_latent_MRMS'] = LDM_latent_mrms
+            
             dict_save['MRMS_latent'] = MRMS_latent
             dict_save['APCP_latent'] = APCP_latent
+            
             dict_save['MRMS_pred'] = MRMS_pred
             dict_save['MRMS_true'] = MRMS_true
             dict_save['APCP_true'] = APCP_true
@@ -619,6 +556,5 @@ for day in range(day_start, day_end, 1):
             np.save(name_, dict_save)
             print("--- %s seconds ---" % (time.time() - start_time))
 
-        
 
 
