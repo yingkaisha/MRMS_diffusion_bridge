@@ -88,7 +88,7 @@ for lead in LEADs:
                     if 'Probability' in str(var_name):
                         continue;
                     else:
-                        i_start = i # the first entry without "Probability" keyword is quantile 0.01
+                        i_start += i # the first entry without "Probability" keyword is quantile 0.01
                         break;
                 # ------------------------------------------------------------------------------ #        
                 with pygrib.open(name_) as grbio:
