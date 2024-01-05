@@ -51,6 +51,11 @@ lead = int(args['lead'])
 day_start = int(args['day0'])
 day_end = int(args['day1'])
 
+# assuming start - end  = 30
+day_start += 20
+#day_end -= 20
+# ------------------------- #
+
 year = 2023; N_days = 365
 
 T = 20
