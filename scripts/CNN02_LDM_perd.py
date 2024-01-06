@@ -53,7 +53,7 @@ day_end = int(args['day1'])
 
 # assuming start - end  = 30
 day_start += 20
-#day_end -= 20
+# day_end -= 10
 # ------------------------- #
 
 year = 2023; N_days = 365
