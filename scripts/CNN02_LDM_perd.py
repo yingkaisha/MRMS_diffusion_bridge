@@ -52,7 +52,7 @@ day_start = int(args['day0'])
 day_end = int(args['day1'])
 
 # assuming start - end  = 30
-day_start += 20
+# day_start += 10
 # day_end -= 10
 # ------------------------- #
 
