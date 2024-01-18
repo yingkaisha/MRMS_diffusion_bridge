@@ -54,11 +54,11 @@ N_atten2 = np.sum(right_attention)
 
 load_weights = True # True: load previous weights
 # location of the previous weights
-model_name = '/glade/work/ksha/GAN/models/LDM_025_resize{}-{}_res{}_tune1/'.format(
+model_name = '/glade/work/ksha/GAN/models/LDM_025_resize{}-{}_res{}_tune0/'.format(
     N_atten1, N_atten2, num_res_blocks)
 
 # location for saving new weights
-model_name_save = '/glade/work/ksha/GAN/models/LDM_025_resize{}-{}_res{}_tune2/'.format(
+model_name_save = '/glade/work/ksha/GAN/models/LDM_025_resize{}-{}_res{}_tune1/'.format(
     N_atten1, N_atten2, num_res_blocks)
 
 lr = 1e-5 # learning rate
@@ -199,7 +199,14 @@ for i, name in enumerate(filename_valid):
     temp_data = np.load(name, allow_pickle=True)[()]
     X_valid[i, ...] = temp_data['GFS']
     Y_valid[i, ...] = 2*(temp_data['MRMS']/precip_max-0.5)
+    
 Y_valid[Y_valid>1.0] = 1.0
+
+temp = X_valid[..., 1]
+temp[temp<0] = 0
+temp = 2*(temp/precip_max-0.5)
+temp[temp>1.0] = 1.0
+X_valid[..., 1] = temp
 
 # validate on random timesteps
 t_valid_ = np.random.uniform(low=0, high=total_timesteps, size=(L_valid,))
@@ -211,10 +218,6 @@ images_valid = np.array(gdf_util.q_sample(Y_valid, t_valid, noise_valid))
 
 # validation prediction example:
 # pred_noise = model.predict([images_valid, t_valid, X_valid])
-
-pred_noise = model.predict([images_valid, t_valid, X_valid])
-record = np.mean(np.abs(noise_valid - pred_noise))
-print('Initial validation loss: {}'.format(record))
 
 # collect all training batches
 filename_train1 = sorted(glob(BATCH_dir+'*2021*.npy'))
@@ -255,6 +258,13 @@ for i in range(epochs):
             
         Y_batch[Y_batch>1.0] = 1.0
 
+        temp = X_batch[..., 1]
+        temp[temp<0] = 0
+        temp = 2*(temp/precip_max-0.5)
+        temp[temp>1.0] = 1.0
+        X_batch[..., 1] = temp
+
+        
         # sample timesteps uniformly
         t_ = np.random.uniform(low=0, high=total_timesteps, size=(batch_size,))
         t = t_.astype(int)
@@ -282,4 +292,5 @@ for i in range(epochs):
 
     print("--- %s seconds ---" % (time.time() - start_time))
     # mannual callbacks
+
 

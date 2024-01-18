@@ -22,8 +22,11 @@ with h5py.File(save_dir+'CNN_domain.hdf', 'r') as h5io:
     lon_GFS = h5io['lon_GFS'][...]
     lat_GFS = h5io['lat_GFS'][...]
 
-year = 2021
+year = 2023
 BATCH_dir = '/glade/campaign/cisl/aiml/ksha/BATCH_MRMS_025/'
+
+gapx = 7
+gapy = 12
 
 N_hour = 3
 size_x = 128 # patch size: 128-by-256
@@ -51,7 +54,7 @@ for i in range(L):
     # if MRMS has no NaNs
     if np.sum(np.isnan(mrms)) == 0:
         mrms_save[...] = 0.0
-        mrms_save[0:x_mrms, 0:y_mrms] = mrms
+        mrms_save[gapy:x_mrms+gapy, gapx:y_mrms+gapx] = mrms
         
         # if the patch contains enough raining grid cells
         if np.sum(mrms_save > V_rain_thres) > N_rain_thres:
