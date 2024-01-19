@@ -22,13 +22,13 @@ with h5py.File(save_dir+'CNN_domain.hdf', 'r') as h5io:
     lon_GFS = h5io['lon_GFS'][...]
     lat_GFS = h5io['lat_GFS'][...]
 
-year = 2023
+year = 2021
 BATCH_dir = '/glade/campaign/cisl/aiml/ksha/BATCH_MRMS_025/'
 
 gapx = 7
 gapy = 12
 
-N_hour = 3
+N_hour = 6
 size_x = 128 # patch size: 128-by-256
 size_y = 256
 

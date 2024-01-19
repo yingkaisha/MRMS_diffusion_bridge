@@ -537,7 +537,7 @@ for day in range(day_start, day_end, 1):
                             
                         else:
                             print("all-zero precip detected")
-                            MRMS_pred[n, count, ...] = 0
+                            MRMS_pred[:, count, ...] = 0
                             MRMS_true[count, ...] = data[:, ix0:ix1, iy0:iy1, 0]
                             APCP_true[count, ...] = data[:, ix0:ix1, iy0:iy1, 1]
                             count += 1
